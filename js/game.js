@@ -28,8 +28,10 @@ let currentChair = null;
 let spaceKey;
 let helpText;
 let playerDirection = 'down'; // Track player direction for animations
+let obstacles; // Global obstacles group
 
 function preload() {
+    
     // We'll create assets programmatically instead of loading images
     this.load.image('blank', generateBlankTexture(this));
 }
@@ -55,13 +57,8 @@ function create() {
     createPlantTexture(this);
     createDoorTextures(this);
     
-    // Create player
-    player = this.physics.add.sprite(400, 300, 'player-down');
-    player.setCollideWorldBounds(true);
-    player.setSize(24, 24);
-    
-    // Create player animations
-    createPlayerAnimations(this);
+    // Create obstacle group - make it a global variable
+    obstacles = this.physics.add.staticGroup();
     
     // Create walls
     createWalls(this);
@@ -71,6 +68,17 @@ function create() {
     
     // Create office furniture
     createOfficeFurniture(this);
+    
+    // Create player
+    player = this.physics.add.sprite(400, 300, 'player-down');
+    player.setCollideWorldBounds(true);
+    player.setSize(24, 24);
+    
+    // Create player animations
+    createPlayerAnimations(this);
+    
+    // Add collision between player and all obstacles
+    this.physics.add.collider(player, obstacles);
     
     // Set up input
     cursors = this.input.keyboard.createCursorKeys();
@@ -465,17 +473,14 @@ function createPlayerAnimations(scene) {
 function createWalls(scene) {
     // Create outer walls
     for (let x = 0; x < config.width; x += 32) {
-        scene.physics.add.image(x, 0, 'wall').setOrigin(0).setImmovable(true);
-        scene.physics.add.image(x, config.height - 32, 'wall').setOrigin(0).setImmovable(true);
+        obstacles.create(x, 0, 'wall').setOrigin(0).refreshBody();
+        obstacles.create(x, config.height - 32, 'wall').setOrigin(0).refreshBody();
     }
     
     for (let y = 0; y < config.height; y += 32) {
-        scene.physics.add.image(0, y, 'wall').setOrigin(0).setImmovable(true);
-        scene.physics.add.image(config.width - 32, y, 'wall').setOrigin(0).setImmovable(true);
+        obstacles.create(0, y, 'wall').setOrigin(0).refreshBody();
+        obstacles.create(config.width - 32, y, 'wall').setOrigin(0).refreshBody();
     }
-    
-    // Add collision between player and walls
-    scene.physics.add.collider(player, scene.physics.world.staticBodies);
 }
 
 function createMeetingRooms(scene) {
@@ -489,26 +494,25 @@ function createMeetingRooms(scene) {
 function createMeetingRoom(scene, x, y, width, height) {
     // Create meeting room walls
     for (let i = 0; i < width; i += 32) {
-        scene.physics.add.image(x + i, y, 'wall').setOrigin(0).setImmovable(true);
-        scene.physics.add.image(x + i, y + height - 32, 'wall').setOrigin(0).setImmovable(true);
+        obstacles.create(x + i, y, 'wall').setOrigin(0).refreshBody();
+        obstacles.create(x + i, y + height - 32, 'wall').setOrigin(0).refreshBody();
     }
     
     for (let i = 0; i < height; i += 32) {
-        scene.physics.add.image(x, y + i, 'wall').setOrigin(0).setImmovable(true);
-        scene.physics.add.image(x + width - 32, y + i, 'wall').setOrigin(0).setImmovable(true);
+        obstacles.create(x, y + i, 'wall').setOrigin(0).refreshBody();
+        obstacles.create(x + width - 32, y + i, 'wall').setOrigin(0).refreshBody();
     }
     
-    // Create door (middle of the left wall)
+    // Create door (middle of the bottom wall)
     const doorX = x + width / 2 - 16;
     const doorY = y + height - 32;
-    const door = scene.physics.add.image(doorX, doorY, 'door_closed').setOrigin(0);
-    door.setImmovable(true);
+    const door = obstacles.create(doorX, doorY, 'door_closed').setOrigin(0).refreshBody();
     door.isOpen = false;
     doors.push(door);
     
     // Add meeting room furniture
     // Conference table
-    scene.add.image(x + width / 2, y + height / 2, 'desk').setOrigin(0.5).setScale(2, 1);
+    const table = obstacles.create(x + width / 2, y + height / 2, 'desk').setOrigin(0.5).setScale(2, 1).refreshBody();
     
     // Chairs around the table
     const chairPositions = [
@@ -521,8 +525,7 @@ function createMeetingRoom(scene, x, y, width, height) {
     ];
     
     chairPositions.forEach(pos => {
-        const chair = scene.physics.add.image(pos.x, pos.y, 'chair').setOrigin(0.5);
-        chair.setImmovable(true);
+        const chair = obstacles.create(pos.x, pos.y, 'chair').setOrigin(0.5).refreshBody();
         chairs.push(chair);
     });
 }
@@ -540,11 +543,10 @@ function createOfficeFurniture(scene) {
     ];
     
     deskPositions.forEach(pos => {
-        scene.add.image(pos.x, pos.y, 'desk').setOrigin(0.5);
+        const desk = obstacles.create(pos.x, pos.y, 'desk').setOrigin(0.5).refreshBody();
         
         // Add chair for each desk
-        const chair = scene.physics.add.image(pos.x, pos.y + 40, 'chair').setOrigin(0.5);
-        chair.setImmovable(true);
+        const chair = obstacles.create(pos.x, pos.y + 40, 'chair').setOrigin(0.5).refreshBody();
         chairs.push(chair);
     });
     
@@ -559,13 +561,14 @@ function createOfficeFurniture(scene) {
     ];
     
     plantPositions.forEach(pos => {
-        const plant = scene.physics.add.image(pos.x, pos.y, 'plant').setOrigin(0.5);
-        plant.setImmovable(true);
-        scene.physics.add.collider(player, plant);
+        obstacles.create(pos.x, pos.y, 'plant').setOrigin(0.5).refreshBody();
     });
 }
 
 function sitOnChair(chair) {
+    // Temporarily remove chair from obstacles when sitting
+    chair.body.enable = false;
+    
     isSitting = true;
     currentChair = chair;
     player.x = chair.x;
@@ -575,6 +578,12 @@ function sitOnChair(chair) {
 
 function standUp() {
     isSitting = false;
+    
+    // Re-enable chair collision when standing up
+    if (currentChair) {
+        currentChair.body.enable = true;
+    }
+    
     currentChair = null;
     player.y += 20; // Move player away from chair
     helpText.setText('Use arrow keys to move. Press SPACE to interact with doors and chairs.');
